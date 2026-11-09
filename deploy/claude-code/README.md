@@ -26,8 +26,10 @@ This fork (`github.com/MakiBM/EverOS`, branch `claude-code`) adds three model ca
 The embedding server can be one for every project: install with
 `EVEROS_EMBED_URL=http://<host>:7997` and the project uses that one instead of its own.
 
-Models: `claude-opus-5-5` for extraction, retrieval decisions and images (the Anthropic API key,
-billed per use). Embeddings and rerank never leave the machine.
+Models: `claude-haiku-5-5` for extraction, retrieval decisions and images (the Anthropic API key,
+billed per use; measured 2026-11-09 against `claude-opus-5-5` on the same inputs: the same facts,
+profile, case, skill and search hits, at a fortieth of the price per token). Embeddings and rerank
+never leave the machine.
 
 ## Install (in the project directory)
 
@@ -54,7 +56,7 @@ keep it running while they work.
 ## Verified (2026-11-09, sandbox)
 
 All capabilities on, no disabled feature; conversation memory (episode, atomic facts, profile) in
-Polish; search by hybrid, vector, keyword and agentic methods; a recorded agent trajectory became
+Polish (the fork keeps a Polish conversation in Polish; upstream wrote it in Spanish); search by hybrid, vector, keyword and agentic methods; a recorded agent trajectory became
 an agent case and a skill (`skills/skill_*/SKILL.md`), returned by `recall_agent_experience`
 through MCP; weekly reflection run by hand (`POST /api/v2/ome/trigger reflect_episodes`);
 a knowledge document split into topics and found by search; an image and a PDF in one message,
