@@ -78,6 +78,14 @@ base_url = "https://openrouter.ai/api/v1"
 # "json_object" (JSON mode) or "prompt_only" (prompt alone). Not every endpoint
 # accepts a strict schema -- on OpenRouter, sending one can reroute the request.
 # response_format_mode = "json_schema"
+# False when the model refuses a sampling `temperature` (every Claude 5.5 model
+# answers HTTP 400 to it); the field is then left out of every request.
+# temperature_supported = true
+# False when the endpoint rejects a strict schema that refers to itself (Anthropic);
+# such a call then relies on its prompt's JSON skeleton.
+# recursive_schemas_supported = true
+# False when the model takes images but no PDF (Anthropic): PDF pages go as images.
+# pdf_input_supported = true
 # Extra attempts of the identical request after a reply that fails validation.
 # invalid_reply_retries = 1
 # Deadline of one request in seconds. Raise it for slow self-hosted endpoints;
@@ -108,6 +116,14 @@ base_url = ""
 # See [llm]. response_format_mode follows the model: with `model` empty it is
 # inherited from [llm] along with it.
 # response_format_mode = "json_schema"
+# False when the model refuses a sampling `temperature` (every Claude 5.5 model
+# answers HTTP 400 to it); the field is then left out of every request.
+# temperature_supported = true
+# False when the endpoint rejects a strict schema that refers to itself (Anthropic);
+# such a call then relies on its prompt's JSON skeleton.
+# recursive_schemas_supported = true
+# False when the model takes images but no PDF (Anthropic): PDF pages go as images.
+# pdf_input_supported = true
 # invalid_reply_retries = 1
 
 # Multi-round loop tuning. Every one of these is a real field, so `everos config`
@@ -136,6 +152,14 @@ base_url = "https://openrouter.ai/api/v1"
 max_concurrency = 4
 # See [llm].
 # response_format_mode = "json_schema"
+# False when the model refuses a sampling `temperature` (every Claude 5.5 model
+# answers HTTP 400 to it); the field is then left out of every request.
+# temperature_supported = true
+# False when the endpoint rejects a strict schema that refers to itself (Anthropic);
+# such a call then relies on its prompt's JSON skeleton.
+# recursive_schemas_supported = true
+# False when the model takes images but no PDF (Anthropic): PDF pages go as images.
+# pdf_input_supported = true
 # invalid_reply_retries = 1
 # file:// content-item support (read locally by EverOS, not everalgo).
 # file_uri_allow_dirs: empty = allow any readable file (local-first default);

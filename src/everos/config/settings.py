@@ -208,6 +208,31 @@ class LLMSettings(BaseModel):
     Merged under the per-call ``extra``, so a caller can still override a key.
     """
 
+    temperature_supported: bool = True
+    """Whether the model accepts a sampling ``temperature``.
+
+    The extraction prompts ask for one (``0.0`` and the like); a model that
+    refuses the field outright -- every Claude 5.5 model answers HTTP 400
+    "`temperature` is deprecated for this model" -- needs ``false`` here, and
+    the provider then leaves it out of every request this section's model
+    makes. A model capability, so it travels with the model like
+    :attr:`response_format_mode`."""
+    recursive_schemas_supported: bool = True
+    """Whether the endpoint takes a strict schema that refers to itself.
+
+    The knowledge topic tree (``TopicNode.children: list[TopicNode]``) is such a
+    schema; Anthropic's endpoint answers HTTP 400 "Circular reference detected".
+    With ``false`` that one kind of call goes out without ``response_format``: its
+    prompt carries the JSON skeleton and the reply is validated as usual. A model
+    capability, inherited like :attr:`temperature_supported`."""
+    pdf_input_supported: bool = True
+    """Whether the model takes a PDF as input.
+
+    The multimodal parser sends a PDF as one ``application/pdf`` data URI;
+    Anthropic's endpoint takes images only ("media_type: Input should be
+    'image/jpeg', 'image/png', ..."). With ``false`` every page goes as a PNG
+    image instead (the ``multimodal`` extra brings ``pypdfium2``)."""
+
     response_format_mode: ResponseFormatMode = "json_schema"
     """How the reply format is requested from the endpoint.
 
@@ -294,6 +319,16 @@ class DeciderSettings(BaseModel):
     Bounded at zero: the SDK reads it as a count, so a negative value is not "fewer
     retries" but a misconfiguration that would reach ``AsyncOpenAI`` unexamined."""
 
+    temperature_supported: bool = True
+    """Whether the model accepts a sampling ``temperature``. See
+    :attr:`LLMSettings.temperature_supported`. Inherited from ``[llm]``
+    together with the model when ``model`` is empty."""
+    recursive_schemas_supported: bool = True
+    """Whether the endpoint takes a self-referring strict schema. See
+    :attr:`LLMSettings.recursive_schemas_supported`."""
+    pdf_input_supported: bool = True
+    """Whether the model takes a PDF as input. See
+    :attr:`LLMSettings.pdf_input_supported`."""
     response_format_mode: ResponseFormatMode = "json_schema"
     """How the reply format is requested. See
     :attr:`LLMSettings.response_format_mode`. Inherited from ``[llm]``
@@ -369,6 +404,15 @@ class MultimodalSettings(BaseModel):
     api_key: SecretStr | None = None
     base_url: str | None = None
     max_concurrency: int = 4
+    temperature_supported: bool = True
+    """Whether the model accepts a sampling ``temperature``. See
+    :attr:`LLMSettings.temperature_supported`."""
+    recursive_schemas_supported: bool = True
+    """Whether the endpoint takes a self-referring strict schema. See
+    :attr:`LLMSettings.recursive_schemas_supported`."""
+    pdf_input_supported: bool = True
+    """Whether the model takes a PDF as input. See
+    :attr:`LLMSettings.pdf_input_supported`."""
     response_format_mode: ResponseFormatMode = "json_schema"
     """How the reply format is requested. See
     :attr:`LLMSettings.response_format_mode`."""

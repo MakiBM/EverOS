@@ -49,3 +49,10 @@ def test_passes_observer() -> None:
 
 def test_defaults_to_null_observer() -> None:
     assert isinstance(build_llm_provider(_config())._observer, NullObserver)
+
+
+def test_passes_temperature_support() -> None:
+    assert (
+        build_llm_provider(_config(temperature_supported=False))._temperature_supported
+        is False
+    )

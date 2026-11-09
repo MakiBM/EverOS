@@ -9,6 +9,7 @@ defaults, ``None`` and ``extra`` shape the request body.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from collections.abc import Callable
 from typing import Any
@@ -230,6 +231,54 @@ async def test_zero_temperature_is_sent() -> None:
         _prompt(), response_format=_Reply, temperature=0.0
     )
     assert upstream.bodies[0]["temperature"] == 0.0
+
+
+async def test_a_model_without_temperature_never_gets_one() -> None:
+    upstream = _Upstream(_completion())
+    await _provider(upstream, temperature=0.7, temperature_supported=False).achat(
+        _prompt(), response_format=_Reply, temperature=0.0
+    )
+    assert "temperature" not in upstream.bodies[0]
+
+
+class _Tree(StrictOutputModel):
+    name: str
+    children: list[_Tree]
+
+
+async def test_a_self_referring_reply_goes_without_schema_where_unsupported() -> None:
+    upstream = _Upstream(_completion('{"name": "a", "children": []}'), _completion())
+    provider = _provider(upstream, recursive_schemas_supported=False)
+    await provider.achat(_prompt(), response_format=_Tree)
+    await provider.achat(_prompt(), response_format=_Reply)
+    assert "response_format" not in upstream.bodies[0]
+    assert upstream.bodies[1]["response_format"]["type"] == "json_schema"
+
+
+_ONE_PAGE_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids"
+    b"[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 100]>>"
+    b"endobj\ntrailer<</Root 1 0 R>>\n%%EOF"
+)
+
+
+async def test_a_pdf_goes_as_page_images_to_a_model_without_pdf_input() -> None:
+    pytest.importorskip("pypdfium2")
+    pdf = "data:application/pdf;base64," + base64.b64encode(_ONE_PAGE_PDF).decode()
+    message = LLMMessage(
+        role="user",
+        content=[
+            {"type": "text", "text": "read it"},
+            {"type": "image_url", "image_url": {"url": pdf}},
+        ],
+    )
+    upstream = _Upstream(_completion())
+    await _provider(upstream, pdf_input_supported=False).achat(
+        [message], response_format=_Reply
+    )
+    parts = upstream.bodies[0]["messages"][0]["content"]
+    assert parts[0] == {"type": "text", "text": "read it"}
+    assert [p["image_url"]["url"][:22] for p in parts[1:]] == ["data:image/png;base64,"]
 
 
 async def test_call_extra_overrides_configured_extra() -> None:

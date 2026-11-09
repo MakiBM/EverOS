@@ -120,3 +120,31 @@ def test_decider_mode_follows_the_section_that_supplies_the_model() -> None:
 
     settings.decider.model = "other-model"
     assert resolve_decider_config(settings).response_format_mode == "json_schema"
+
+
+def test_a_model_without_temperature_is_resolved_so_for_every_role() -> None:
+    """Claude 5.5 refuses `temperature`; the capability travels with the model."""
+    settings = _settings(temperature_supported=False)
+    settings.multimodal.temperature_supported = False
+    assert resolve_llm_config(settings).temperature_supported is False
+    assert resolve_decider_config(settings).temperature_supported is False
+    assert resolve_multimodal_config(settings).temperature_supported is False
+
+    settings.decider.model = "other-model"
+    assert resolve_decider_config(settings).temperature_supported is True
+
+
+def test_recursive_schema_support_is_resolved_for_every_role() -> None:
+    settings = _settings(recursive_schemas_supported=False)
+    settings.multimodal.recursive_schemas_supported = False
+    assert resolve_llm_config(settings).recursive_schemas_supported is False
+    assert resolve_decider_config(settings).recursive_schemas_supported is False
+    assert resolve_multimodal_config(settings).recursive_schemas_supported is False
+
+
+def test_pdf_input_support_is_resolved_for_every_role() -> None:
+    settings = _settings(pdf_input_supported=False)
+    settings.multimodal.pdf_input_supported = False
+    assert resolve_llm_config(settings).pdf_input_supported is False
+    assert resolve_decider_config(settings).pdf_input_supported is False
+    assert resolve_multimodal_config(settings).pdf_input_supported is False

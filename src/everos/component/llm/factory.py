@@ -50,6 +50,10 @@ class LLMClientConfig:
         extra: Request fields merged into every call.
         response_format_mode: How the reply format is requested.
         invalid_reply_retries: Extra attempts after an unusable reply.
+        temperature_supported: False leaves ``temperature`` out of every request.
+        recursive_schemas_supported: False sends a self-referring reply model
+            without ``response_format``.
+        pdf_input_supported: False sends a PDF as page images.
     """
 
     model: str
@@ -60,6 +64,9 @@ class LLMClientConfig:
     extra: dict[str, Any] = field(default_factory=dict)
     response_format_mode: ResponseFormatMode = "json_schema"
     invalid_reply_retries: int = 1
+    temperature_supported: bool = True
+    recursive_schemas_supported: bool = True
+    pdf_input_supported: bool = True
 
 
 def build_llm_provider(
@@ -83,6 +90,9 @@ def build_llm_provider(
         extra=config.extra,
         response_format_mode=config.response_format_mode,
         invalid_reply_retries=config.invalid_reply_retries,
+        temperature_supported=config.temperature_supported,
+        recursive_schemas_supported=config.recursive_schemas_supported,
+        pdf_input_supported=config.pdf_input_supported,
         observer=observer,
     )
 
@@ -138,12 +148,12 @@ def resolve_decider_config(settings: Settings) -> DeciderClientConfig:
         raise LLMNotConfiguredError(
             missing_config_error("decider api_key and base_url", "decider")
         )
-    # `extra` is endpoint vocabulary and `response_format_mode` a model capability,
-    # so both travel with whichever section supplied the model: a decider on its own
-    # gateway must not inherit a field that gateway rejects, and a decider inheriting
-    # `[llm]` must not lose the field that endpoint requires -- dropping `[llm].extra`
-    # there would silently re-enable thinking on a Qwen deployment that configured it
-    # off once, for both roles.
+    # `extra` is endpoint vocabulary, `response_format_mode` and the `*_supported` flags
+    # model capabilities, so they travel with whichever section supplied the model: a
+    # decider on its own gateway must not inherit a field that gateway rejects, and a
+    # decider inheriting `[llm]` must not lose the field that endpoint requires --
+    # dropping `[llm].extra` there would silently re-enable thinking on a Qwen
+    # deployment that configured it off once, for both roles.
     model_section = cfg if cfg.model else llm_cfg
     return DeciderClientConfig(
         model=model,
@@ -153,6 +163,9 @@ def resolve_decider_config(settings: Settings) -> DeciderClientConfig:
         max_retries=cfg.sdk_max_retries,
         extra=dict(model_section.extra),
         response_format_mode=model_section.response_format_mode,
+        temperature_supported=model_section.temperature_supported,
+        recursive_schemas_supported=model_section.recursive_schemas_supported,
+        pdf_input_supported=model_section.pdf_input_supported,
         invalid_reply_retries=cfg.invalid_reply_retries,
         inherits_model=not cfg.model,
     )
@@ -174,6 +187,9 @@ def resolve_llm_config(settings: Settings) -> LLMClientConfig:
         extra=dict(cfg.extra),
         response_format_mode=cfg.response_format_mode,
         invalid_reply_retries=cfg.invalid_reply_retries,
+        temperature_supported=cfg.temperature_supported,
+        recursive_schemas_supported=cfg.recursive_schemas_supported,
+        pdf_input_supported=cfg.pdf_input_supported,
     )
 
 
@@ -191,6 +207,9 @@ def resolve_multimodal_config(settings: Settings) -> LLMClientConfig:
         base_url=cfg.base_url,
         response_format_mode=cfg.response_format_mode,
         invalid_reply_retries=cfg.invalid_reply_retries,
+        temperature_supported=cfg.temperature_supported,
+        recursive_schemas_supported=cfg.recursive_schemas_supported,
+        pdf_input_supported=cfg.pdf_input_supported,
     )
 
 

@@ -109,7 +109,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-multimodal = ["everalgo-parser[svg]==0.3.0rc2"]  # [svg] bundles cairosvg → SVG works by default
+multimodal = [
+    "everalgo-parser[svg]==0.3.0rc2",  # [svg] bundles cairosvg → SVG works by default
+    # PDF pages as images for an endpoint without PDF input (`pdf_input_supported`).
+    "pypdfium2>=5.15,<6",
+]
 # Native OpenTelemetry tracing export. Optional — EverOS never imports these
 # unless [observability] is enabled. Install with: pip install everos[otel]
 otel = [

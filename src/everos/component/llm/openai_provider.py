@@ -27,6 +27,8 @@ from __future__ import annotations
 
 __all__ = ["OpenAIProvider", "ResponseFormatMode"]
 
+import base64
+import io
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Final, Literal
 
@@ -54,6 +56,80 @@ _CUT_SHORT_REASONS: Final = frozenset({"length", "content_filter"})
 # vLLM-style gateways report these when the server gave up on a generation it
 # could have finished, so the identical request may well succeed.
 _ABORTED_REASONS: Final = frozenset({"abort", "error"})
+
+
+_PDF_DATA_URI: Final = "data:application/pdf;base64,"
+# Pages sent per PDF and their render scale (1.5 = 108 dpi): enough to read body text.
+_PDF_MAX_PAGES: Final = 50
+_PDF_RENDER_SCALE: Final = 1.5
+
+
+def _pdf_parts_as_page_images(message: dict[str, Any]) -> dict[str, Any]:
+    """``message`` with every PDF data-URI part replaced by one PNG part per page."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return message
+    parts: list[Any] = []
+    for part in content:
+        url = (
+            (part.get("image_url") or {}).get("url", "")
+            if isinstance(part, dict)
+            else ""
+        )
+        if not url.startswith(_PDF_DATA_URI):
+            parts.append(part)
+            continue
+        parts.extend(
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{png}"}}
+            for png in _pdf_pages_as_png(base64.b64decode(url[len(_PDF_DATA_URI) :]))
+        )
+    return {**message, "content": parts}
+
+
+def _pdf_pages_as_png(pdf: bytes) -> list[str]:
+    """The first :data:`_PDF_MAX_PAGES` pages of ``pdf`` as base64 PNG."""
+    import pypdfium2
+
+    document = pypdfium2.PdfDocument(pdf)
+    try:
+        pages = []
+        for index in range(min(len(document), _PDF_MAX_PAGES)):
+            image = document[index].render(scale=_PDF_RENDER_SCALE).to_pil()
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            pages.append(base64.b64encode(buffer.getvalue()).decode())
+        return pages
+    finally:
+        document.close()
+
+
+def _refers_to_itself(model: type[BaseModel]) -> bool:
+    """Whether the JSON schema of ``model`` holds a definition that reaches itself."""
+    defs = model.model_json_schema().get("$defs", {})
+
+    def refs(node: Any) -> set[str]:
+        if isinstance(node, dict):
+            ref = node.get("$ref", "")
+            found = {ref.rsplit("/", 1)[-1]} if ref.startswith("#/$defs/") else set()
+            return found.union(*(refs(value) for value in node.values()))
+        if isinstance(node, list):
+            return set().union(*(refs(item) for item in node))
+        return set()
+
+    edges = {name: refs(body) for name, body in defs.items()}
+
+    def reaches(start: str) -> bool:
+        seen, todo = set(), list(edges.get(start, ()))
+        while todo:
+            name = todo.pop()
+            if name == start:
+                return True
+            if name not in seen:
+                seen.add(name)
+                todo.extend(edges.get(name, ()))
+        return False
+
+    return any(reaches(name) for name in edges)
 
 
 class _AttemptFailedError(Exception):
@@ -103,6 +179,16 @@ class OpenAIProvider:
             ``prompt_only`` nothing (the prompt alone asks for JSON).
         invalid_reply_retries: Extra attempts after an attempt whose reply
             fails validation, carries no choice, or was aborted upstream.
+        temperature_supported: False leaves ``temperature`` out of every request,
+            whatever the caller asks for: some models (every Claude 5.5 one) answer
+            HTTP 400 to the field itself.
+        pdf_input_supported: False sends a PDF part (an ``application/pdf`` data URI)
+            as one PNG image per page: some endpoints (Anthropic's) take images but
+            no PDF. Needs the ``multimodal`` extra (``pypdfium2``).
+        recursive_schemas_supported: False sends a reply model whose schema refers
+            to itself (a topic tree) without ``response_format``: some endpoints
+            (Anthropic's) reject a circular strict schema, while every such prompt
+            carries its JSON skeleton and the reply is validated all the same.
         observer: Notified of every completion received, failed ones included.
         http_client: Passed to ``openai.AsyncOpenAI``; tests inject an
             ``httpx.AsyncClient`` over ``httpx.MockTransport`` here.
@@ -124,6 +210,9 @@ class OpenAIProvider:
         extra: Mapping[str, Any] | None = None,
         response_format_mode: ResponseFormatMode = "json_schema",
         invalid_reply_retries: int = 1,
+        temperature_supported: bool = True,
+        recursive_schemas_supported: bool = True,
+        pdf_input_supported: bool = True,
         observer: LLMCallObserver | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -133,6 +222,9 @@ class OpenAIProvider:
             )
         self._model = model
         self._temperature = temperature
+        self._temperature_supported = temperature_supported
+        self._recursive_schemas_supported = recursive_schemas_supported
+        self._pdf_input_supported = pdf_input_supported
         self._max_tokens = max_tokens
         self._extra: dict[str, Any] = dict(extra or {})
         self._response_format_mode: ResponseFormatMode = response_format_mode
@@ -193,16 +285,27 @@ class OpenAIProvider:
         """Build the request: call values beat defaults, None omitted, extras last."""
         optional: dict[str, Any] = {
             "temperature": (
-                temperature if temperature is not None else self._temperature
+                (temperature if temperature is not None else self._temperature)
+                if self._temperature_supported
+                else None
             ),
             "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
             "response_format": to_openai_response_format(
-                response_format, self._response_format_mode
+                response_format,
+                "prompt_only"
+                if not self._recursive_schemas_supported
+                and _refers_to_itself(response_format)
+                else self._response_format_mode,
             ),
         }
         return {
             "model": self._model,
-            "messages": [message.model_dump() for message in messages],
+            "messages": [
+                message.model_dump()
+                if self._pdf_input_supported
+                else _pdf_parts_as_page_images(message.model_dump())
+                for message in messages
+            ],
             **{key: value for key, value in optional.items() if value is not None},
             **self._extra,
             **extra,
