@@ -6,6 +6,9 @@ follow it. Decided by Unicode script, not a trained detector: the target set
 is seven languages, and script ranges separate the non-Latin ones exactly.
 Within the Latin script English is the default; German and Spanish need two
 markers of their own, so a short German or Spanish text may read as English.
+A Latin text with letters of a language outside the seven (Polish ą ę ł ś ż,
+Czech ř ě ů, ...) has no output language: the extractors then keep the
+conversation's own language, where guessing used to turn Polish into Spanish.
 """
 
 from __future__ import annotations
@@ -56,6 +59,11 @@ _LATIN_MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
 )
 
+# Without IGNORECASE: case folding would match "ı" (dotless i) to every "i".
+_OTHER_LATIN = re.compile(r"[ąćęłńśźżčřěůťďňľĺŕőűăâîșțşğıĄĆĘŁŃŚŹŻČŘĚŮŤĎŇĽĹŔŐŰĂÂÎȘȚŞĞİ]")
+"""Letters of Latin-script languages that are not an output language: none of them
+occurs in English, German or Spanish."""
+
 _LATIN_MIN_MARKERS = 2
 """A single loanword ("café", "über") must not relabel English text."""
 
@@ -69,7 +77,8 @@ def detect_output_language(text: str) -> str | None:
     Returns:
         ``"Chinese"``, ``"English"``, ``"German"``, ``"Japanese"``,
         ``"Korean"``, ``"Russian"`` or ``"Spanish"``; ``None`` when ``text``
-        has no letters to judge (empty, digits, punctuation).
+        has no letters to judge (empty, digits, punctuation) or is written in
+        a Latin-script language that is none of these (Polish, Czech, ...).
     """
     counts = _script_counts(text)
     letters = sum(counts.values())
@@ -78,6 +87,8 @@ def detect_output_language(text: str) -> str | None:
     for language, _ranges, share in _NON_LATIN:
         if counts[language] / letters >= share:
             return language
+    if len(_OTHER_LATIN.findall(text)) >= _LATIN_MIN_MARKERS:
+        return None
     return _latin_language(text)
 
 

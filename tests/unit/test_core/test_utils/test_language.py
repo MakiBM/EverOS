@@ -49,6 +49,21 @@ def test_mixed_text_follows_its_dominant_language(text: str, expected: str) -> N
     assert detect_output_language(text) == expected
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Użytkownik ustalił, że deploy idzie tylko z gałęzi dev, a raporty są krótkie.",
+        "Bart przekazał agentowi zasady projektu NPO: wdrożenie wyłącznie z dev.",
+        "Uživatel řekl, že nasazení probíhá pouze z větve dev.",
+    ],
+)
+def test_a_latin_language_outside_the_seven_keeps_the_conversations_language(
+    text: str,
+) -> None:
+    """Polish used to read as Spanish (its "ó" and "na" look like markers)."""
+    assert detect_output_language(text) is None
+
+
 def test_every_answer_is_an_output_language_value() -> None:
     samples = ["中文", "English", "Deutsch und nicht", "ひらがな", "한국어", "Русский"]
     for sample in samples:
